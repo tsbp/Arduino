@@ -16,7 +16,7 @@ DallasTemperature sensors(&oneWire);
 BlynkTimer timer;//, timerSpi;
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
-char auth[] = "4cf6924bdf534d4dbff1fd2fdb5ec8b7";
+char auth[] = "6a79ae3f691d49c0b5f6a33ea8322a45";
 
 // Your WiFi credentials.
 // Set password to "" for open networks.

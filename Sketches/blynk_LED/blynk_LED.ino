@@ -115,7 +115,7 @@ void setup()
   pinMode(2, OUTPUT); // pwm
   digitalWrite(2, HIGH);
     
-  Blynk.begin(auth, ssid, pass);//, "10.10.10.22", 8080);
+  //Blynk.begin(auth, ssid, pass);//, "10.10.10.22", 8080);
   SPI.begin();
   espSpi.begin();
   display(scr, 6); 
