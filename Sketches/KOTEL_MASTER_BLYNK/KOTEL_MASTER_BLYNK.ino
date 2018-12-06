@@ -29,72 +29,33 @@ char pass[] = "123454321";
 char aBuf[30];
 
 WiFiUDP Udp;
-unsigned int localUdpPort = 4210;  // local port to listen on
+IPAddress ip;
+unsigned int localUdpPort = 8266;  // local port to listen on
 //char incomingPacket[255];  // buffer for incoming packets
+char  replyPacket[2 * sizeof(float)];
 //==================================================================================================
-WidgetLED led(V6);
-float presetTemp = 22, tempBabyRoom = 0, hystTemp = 0.2;
+WidgetLED led(V7);
+float presetTemp = 22.51, tempBabyRoom = 0, hystTemp = 0.2;
 #define PIN_RELAY (5)
 //================================================================================================== 
-void printTemp()
-{
-  if (aBuf[0] == '+')
-    char_24x16(12, 0, 1);
-    else
-    char_24x16(13, 0, 1);
-  
-  char_24x16(aBuf[1] , 16, 1);
-  char_24x16(aBuf[2], 32, 1);
-  char_24x16(14, 48, 1);
-  char_24x16(aBuf[3], 56, 1);
-  char_24x16(11, 72, 1);
-}
-//================================================================================================== 
-void printPreset(int a)
-{
-  char b[3];
-  b[2] = a%10; a= a/10;
-  b[1] = a%10;
-  b[0] = a/10; 
-  
-  char_10x16(b[0], 5, 5);
-  char_10x16(b[1], 15, 5);
-  char_10x16(  11, 25, 5);
-  char_10x16(b[2], 30, 5);
-
-  
-  char_10x16((int)hystTemp, 66, 5);
-  char_10x16(  11, 76, 5);
-  char_10x16((int)(hystTemp*10)%10, 81, 5);
-}
-//================================================================================================== 
 void setup()
-{  
-  lcd_init();
-  printTemp();
-        
+{          
   Serial.begin(115200);  
   Blynk.begin(auth, ssid, pass, "10.10.10.22", 8080);
 
   Udp.begin(localUdpPort);
   Serial.printf("Now listening at IP %s, UDP port %d\n", WiFi.localIP().toString().c_str(), localUdpPort);
-  timer.setInterval(2000L, sendTemps);  
+  timer.setInterval(2000L, sendTemps); 
+  ip = WiFi.localIP();
+  ip[3] = 255; 
+  //replyPacket[8] = 0;
 
-  pinMode(PIN_RELAY, OUTPUT);
-  printPreset((int)(presetTemp *10));
+  pinMode(PIN_RELAY, OUTPUT);  
 }
-
-
 //==================================================================================================
 void sendTemps()
 { 
-  int t = (int)(tempBabyRoom*10);
-  aBuf[3] = t%10; t= t/10;
-  aBuf[2] = t%10;
-  aBuf[1] = t/10;
-  printTemp();
-  //=========================================
-  tempBabyRoom = (float)((int)(tempBabyRoom*10))/10;
+  
   if(tempBabyRoom <= (presetTemp - hystTemp))  
   {
     digitalWrite(PIN_RELAY, HIGH);
@@ -106,9 +67,24 @@ void sendTemps()
     led.off();
   }
   //========================================
-  Blynk.virtualWrite(3, tempBabyRoom); 
+  Blynk.virtualWrite(2, tempBabyRoom);
+  Blynk.virtualWrite(3, presetTemp -0.01);
+  Blynk.virtualWrite(4, hystTemp);
   //if(tempBabyRoom > 26) Blynk.notify(String("Alarma"));
-  Blynk.virtualWrite(2, presetTemp);
+
+     
+  // send back a reply, to the IP address and port we got the packet from
+  memcpy(replyPacket,     &presetTemp, sizeof(float));
+  memcpy(replyPacket + 4, &hystTemp,   sizeof(float));
+  
+
+  
+  for(int i = 0; i < 8; i++)  Serial.print(replyPacket[i], HEX); Serial.println();
+  
+  Udp.beginPacket(ip, localUdpPort);
+  Udp.write(replyPacket);
+  Udp.endPacket();
+  
 } 
 //==================================================================================================
 void udpReceive()
@@ -125,7 +101,8 @@ void udpReceive()
     }
     Serial.printf("UDP packet contents: %s\n", aBuf);   
 
-    tempBabyRoom = atof(aBuf) / 10; 
+    //tempBabyRoom = atof(aBuf) / 10; 
+    memcpy(&tempBabyRoom, aBuf,     sizeof(float));
     Serial.print("tempBabyRoom = ");    
     Serial.println(tempBabyRoom);    
   }
@@ -140,13 +117,15 @@ void loop()
 //==================================================================================================
  BLYNK_WRITE(V5)
   {
-     presetTemp = param.asFloat(); // assigning incoming value from pin V1 to a variable
-     printPreset((int)(presetTemp *10));
+     presetTemp = param.asFloat() + 0.01; // assigning incoming value from pin V1 to a variable   
+     Serial.print("presetTemp = ");    
+     Serial.println(presetTemp); 
   }
 //==================================================================================================
- BLYNK_WRITE(V4)
+ BLYNK_WRITE(V6)
   {
-     hystTemp = param.asFloat(); // assigning incoming value from pin V1 to a variable   
-     printPreset((int)(presetTemp *10));  
+     hystTemp = param.asFloat() + 0.01; // assigning incoming value from pin V1 to a variable   
+      Serial.print("hystTemp = ");    
+     Serial.println(hystTemp);   
   }
     
