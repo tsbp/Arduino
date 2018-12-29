@@ -78,6 +78,16 @@ void setup()
   ticker.attach(1.5, getTemperature);
 }
 //==================================================================================================
+char paramString[3] = "";
+//==================================================================================================
+void parametersToString()
+{
+  int a = (int)(temperature*10);
+  paramString[0] = a/100 +'0'; a %= 100;
+  paramString[1] = a/10 + '0';
+  paramString[2] = a%10 + '0';  
+}
+//==================================================================================================
 void udpReceive()
 {
   int packetSize = Udp.parsePacket();
@@ -90,21 +100,28 @@ void udpReceive()
     {
       aBuf[len] = 0;
     }
-    Serial.printf("UDP packet contents: %s\n", aBuf);   
-    
+    Serial.printf("UDP packet contents: %s\n", aBuf);  
+
+   char tt[3];
+   memcpy(tt, aBuf, 3);    presetTemp = (float)(atoi(tt)) / 10;
+   char ttt[2];
+   memcpy(ttt, aBuf+3, 2);    hystTemp = (float)(atoi(ttt)) / 10;
+   Serial.println(ttt);
    
-   memcpy(&presetTemp, aBuf,     sizeof(float));
-   memcpy(&hystTemp,   aBuf + 4, sizeof(float));
+//   memcpy(&presetTemp, aBuf,     sizeof(float));
+//   memcpy(&hystTemp,   aBuf + 4, sizeof(float));
    Serial.print("presetTemp = "); Serial.println(presetTemp);
    Serial.print("hystTemp = ");   Serial.println(hystTemp);
    
    
    // send back a reply, to the IP address and port we got the packet from
-   memcpy(replyPacket, &temperature, sizeof(float));
-   Serial.print("T = "); Serial.println(temperature);
-   for(int i = 0; i < sizeof(float); i++)  Serial.print(replyPacket[i], HEX); Serial.println();
+//   temperature += 0.0001;
+//   memcpy(replyPacket, &temperature, sizeof(float));
+//   Serial.print("T = "); Serial.println(temperature);
+//   for(int i = 0; i < sizeof(float); i++)  Serial.print(replyPacket[i], HEX); Serial.println();
+   parametersToString();
    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-   Udp.write(replyPacket);
+   Udp.write(paramString);
    Udp.endPacket();
   }
 }

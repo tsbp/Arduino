@@ -11,6 +11,7 @@
 #include <DallasTemperature.h>
 #include <String.h>
 #include "driver_nokia_1100_lcd.h"
+#include <EEPROM.h>
 //==================================================================================================
 #define ONE_WIRE_BUS 2 // DS18B20 pin connect
 OneWire oneWire(ONE_WIRE_BUS);
@@ -35,27 +36,75 @@ unsigned int localUdpPort = 8266;  // local port to listen on
 char  replyPacket[2 * sizeof(float)];
 //==================================================================================================
 WidgetLED led(V7);
-float presetTemp = 22.51, tempBabyRoom = 0, hystTemp = 0.2;
+float presetTemp = 22.0, tempBabyRoom = 0, hystTemp = 0.2;
 #define PIN_RELAY (5)
 //================================================================================================== 
 void setup()
 {          
   Serial.begin(115200);  
+  Serial.println("");
+  EEPROM.begin(10);
+  char tmp[4];
+  
+  for(int i = 0; i < 4; i++) tmp[i] = EEPROM.read(i); 
+  memcpy(&presetTemp, tmp,     sizeof(float));
+  
+  for(int i = 0; i < 4; i++) tmp[i] = EEPROM.read(i + 4);
+  memcpy(&hystTemp, tmp,     sizeof(float));
+  
+  Serial.print("presetTemp = "); Serial.println(presetTemp);   
+  Serial.print("hystTemp = ");   Serial.println(hystTemp);   
+  
   Blynk.begin(auth, ssid, pass, "10.10.10.22", 8080);
 
   Udp.begin(localUdpPort);
   Serial.printf("Now listening at IP %s, UDP port %d\n", WiFi.localIP().toString().c_str(), localUdpPort);
-  timer.setInterval(2000L, sendTemps); 
+  timer.setInterval(1000L, sendTemps); 
   ip = WiFi.localIP();
   ip[3] = 255; 
-  //replyPacket[8] = 0;
+  //replyPacket[2 * sizeof(float)] = 0;
+
+  memcpy(replyPacket,     &presetTemp, sizeof(float));
+  memcpy(replyPacket + 4, &hystTemp,   sizeof(float));
 
   pinMode(PIN_RELAY, OUTPUT);  
 }
 //==================================================================================================
+char paramString[5] = "";
+//==================================================================================================
+void parametersToString()
+{
+  int a = (int)(presetTemp*10);
+  paramString[0] = a/100 +'0'; a %= 100;
+  paramString[1] = a/10 + '0';
+  paramString[2] = a%10 + '0';
+
+  a = (int)(hystTemp *10);
+  paramString[3] = a/10 + '0';
+  paramString[4] = a%10 + '0';
+  
+}
+//==================================================================================================
 void sendTemps()
 { 
+  // send back a reply, to the IP address and port we got the packet from
+//  memcpy(replyPacket,     &presetTemp, sizeof(float));
+//  memcpy(replyPacket + 4, &hystTemp,   sizeof(float));
   
+
+  
+//  for(int i = 7; i >= 0; i--)  
+//  {
+//    Serial.print("0x");
+//    Serial.print(replyPacket[i], HEX); 
+//    Serial.print("; ");
+//  }
+//  Serial.println();
+  parametersToString();
+  Udp.beginPacket(ip, localUdpPort);
+  Udp.write(paramString);
+  Udp.endPacket();
+ //==================================
   if(tempBabyRoom <= (presetTemp - hystTemp))  
   {
     digitalWrite(PIN_RELAY, HIGH);
@@ -68,22 +117,9 @@ void sendTemps()
   }
   //========================================
   Blynk.virtualWrite(2, tempBabyRoom);
-  Blynk.virtualWrite(3, presetTemp -0.01);
+  Blynk.virtualWrite(3, presetTemp);
   Blynk.virtualWrite(4, hystTemp);
   //if(tempBabyRoom > 26) Blynk.notify(String("Alarma"));
-
-     
-  // send back a reply, to the IP address and port we got the packet from
-  memcpy(replyPacket,     &presetTemp, sizeof(float));
-  memcpy(replyPacket + 4, &hystTemp,   sizeof(float));
-  
-
-  
-  for(int i = 0; i < 8; i++)  Serial.print(replyPacket[i], HEX); Serial.println();
-  
-  Udp.beginPacket(ip, localUdpPort);
-  Udp.write(replyPacket);
-  Udp.endPacket();
   
 } 
 //==================================================================================================
@@ -102,7 +138,10 @@ void udpReceive()
     Serial.printf("UDP packet contents: %s\n", aBuf);   
 
     //tempBabyRoom = atof(aBuf) / 10; 
-    memcpy(&tempBabyRoom, aBuf,     sizeof(float));
+    //memcpy(&tempBabyRoom, aBuf,     sizeof(float));
+   char tt[3];
+   memcpy(tt, aBuf, 3);    tempBabyRoom = (float)(atoi(tt)) / 10;
+    
     Serial.print("tempBabyRoom = ");    
     Serial.println(tempBabyRoom);    
   }
@@ -115,17 +154,33 @@ void loop()
   udpReceive();
 }
 //==================================================================================================
+void saveData()
+{
+   EEPROM.begin(10);
+   char tmp[8]; 
+   memcpy(tmp,     &presetTemp,  sizeof(float)); 
+   memcpy(tmp + 4, &hystTemp,  sizeof(float)); 
+   for(int i = 0; i < 8; i++) EEPROM.write(i, tmp[i]);
+   EEPROM.end(); 
+}
+//==================================================================================================
  BLYNK_WRITE(V5)
   {
-     presetTemp = param.asFloat() + 0.01; // assigning incoming value from pin V1 to a variable   
+     presetTemp = param.asFloat(); // assigning incoming value from pin V1 to a variable   
      Serial.print("presetTemp = ");    
      Serial.println(presetTemp); 
+//     memcpy(replyPacket,     &presetTemp, sizeof(float));
+//     memcpy(replyPacket + 4, &hystTemp,   sizeof(float));
+     saveData();
   }
 //==================================================================================================
  BLYNK_WRITE(V6)
   {
-     hystTemp = param.asFloat() + 0.01; // assigning incoming value from pin V1 to a variable   
-      Serial.print("hystTemp = ");    
-     Serial.println(hystTemp);   
+     hystTemp = param.asFloat(); // assigning incoming value from pin V1 to a variable   
+     Serial.print("hystTemp = ");    
+     Serial.println(hystTemp);  
+//     memcpy(replyPacket,     &presetTemp, sizeof(float));
+//     memcpy(replyPacket + 4, &hystTemp,   sizeof(float));
+     saveData();
   }
     
