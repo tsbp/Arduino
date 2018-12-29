@@ -37,7 +37,7 @@ char  replyPacket[2 * sizeof(float)];
 //==================================================================================================
 WidgetLED led(V7);
 float presetTemp = 22.0, tempBabyRoom = 0, hystTemp = 0.2;
-#define PIN_RELAY (5)
+#define PIN_RELAY (12)
 //================================================================================================== 
 void setup()
 {          
